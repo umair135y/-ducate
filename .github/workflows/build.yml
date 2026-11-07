@@ -24,15 +24,4 @@ jobs:
       with:
         gradle-version: '8.5'
 
-    - name: Build APK with Gradle
-      run: |
-        gradle assembleDebug -q 2>&1 | tee build_error.log || true
-        echo "=== EXACT FAILURE REASON ==="
-        grep -E "e: |Error:|FAILED|What went wrong" build_error.log -A 5 || cat build_error.log | tail -n 25
-
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: Educate-App-APK
-        path: app/build/outputs/apk/debug/app-debug.apk
-      if: always()
+    - na
