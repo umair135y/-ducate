@@ -4,222 +4,401 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.MenuBook
-import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
-val RoyalBlue = Color(0xFF2457D6)
-val MidnightNavy = Color(0xFF14213D)
-val AccentTeal = Color(0xFF19B89A)
-val BackgroundIce = Color(0xFFF5F7FC)
-val TextMuted = Color(0xFF6B7280)
+// ==========================================
+// 1. برانڈ کلرز اور ڈیزائن سسٹم
+// ==========================================
+val PrimaryDark = Color(0xFF0F172A)
+val SurfaceDark = Color(0xFF1E293B)
+val BrandIndigo = Color(0xFF6366F1)
+val NeonEmerald = Color(0xFF10B981)
+val LiveRed = Color(0xFFEF4444)
+val AmberGold = Color(0xFFF59E0B)
+val SoftIce = Color(0xFFF8FAFC)
+val CardBorder = Color(0xFFE2E8F0)
+val TextMuted = Color(0xFF64748B)
+
+enum class AppLanguage { ENGLISH, URDU }
+
+enum class StudentGrade(val enLabel: String, val urLabel: String, val levelEn: String, val levelUr: String) {
+    GRADE_1("Class 1", "پہلی جماعت", "Primary Wing", "پرائمری ونگ"),
+    GRADE_5("Class 5", "پانچویں جماعت", "Primary Wing", "پرائمری ونگ"),
+    GRADE_8("Class 8", "آٹھویں جماعت", "Middle Wing", "مڈل ونگ"),
+    GRADE_10("Class 10 (Matric)", "دسویں جماعت (میٹرک)", "Secondary Wing", "ثانوی ونگ"),
+    GRADE_12("Class 12 (FSc/College)", "بارہویں جماعت (کالج)", "College Wing", "کالج ونگ")
+}
+
+data class SubjectItem(val titleEn: String, val titleUr: String, val chapters: Int, val progress: Float)
+data class VideoItem(val titleEn: String, val titleUr: String, val teacher: String, val duration: String, val isLive: Boolean)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme {
-                EducateAppMaster()
+                EducateAppController()
             }
         }
     }
 }
 
+// ==========================================
+// 2. مین کنٹرولر (لاگ ان + زبان + ڈیش بورڈ)
+// ==========================================
 @Composable
-fun EducateAppMaster() {
-    var currentScreen by remember { mutableStateOf("SPLASH") }
-    var selectedRole by remember { mutableStateOf("STUDENT") }
+fun EducateAppController() {
+    var isSplash by remember { mutableStateOf(true) }
+    var isLoggedIn by remember { mutableStateOf(false) }
+    var appLanguage by remember { mutableStateOf(AppLanguage.URDU) }
+    var currentGrade by remember { mutableStateOf(StudentGrade.GRADE_10) }
+    var currentTab by remember { mutableIntStateOf(0) }
 
-    BackHandler(enabled = currentScreen != "LOGIN") {
-        when (currentScreen) {
-            "ABOUT" -> currentScreen = "DASHBOARD"
-            "DASHBOARD" -> currentScreen = "LOGIN"
-        }
+    BackHandler(enabled = isLoggedIn) {
+        if (currentTab != 0) currentTab = 0 else isLoggedIn = false
     }
 
-    when (currentScreen) {
-        "SPLASH" -> SplashScreenUI(onFinish = { currentScreen = "LOGIN" })
-        "LOGIN" -> LoginScreenUI(
-            onLogin = { role ->
-                selectedRole = role
-                currentScreen = "DASHBOARD"
-            },
-            onAbout = { currentScreen = "ABOUT" }
+    if (isSplash) {
+        SplashScreen { isSplash = false }
+    } else if (!isLoggedIn) {
+        OnboardingLoginScreen(
+            selectedLang = appLanguage,
+            selectedGrade = currentGrade,
+            onLangChanged = { appLanguage = it },
+            onGradeChanged = { currentGrade = it },
+            onEnter = { isLoggedIn = true }
         )
-        "DASHBOARD" -> UnifiedDashboardUI(
-            role = selectedRole,
-            onLogout = { currentScreen = "LOGIN" },
-            onAbout = { currentScreen = "ABOUT" }
-        )
-        "ABOUT" -> AboutScreenUI(onBack = { currentScreen = "DASHBOARD" })
+    } else {
+        Scaffold(
+            bottomBar = {
+                BottomNav(
+                    currentTab = currentTab,
+                    lang = appLanguage,
+                    onSelect = { currentTab = it }
+                )
+            }
+        ) { padding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .background(SoftIce)
+            ) {
+                when (currentTab) {
+                    0 -> DashboardView(
+                        grade = currentGrade,
+                        lang = appLanguage,
+                        onToggleLang = {
+                            appLanguage = if (appLanguage == AppLanguage.URDU) AppLanguage.ENGLISH else AppLanguage.URDU
+                        },
+                        onLogout = { isLoggedIn = false }
+                    )
+                    1 -> LecturesView(grade = currentGrade, lang = appLanguage)
+                    2 -> QuizView(grade = currentGrade, lang = appLanguage)
+                    3 -> ProfileView(grade = currentGrade, lang = appLanguage)
+                }
+            }
+        }
     }
 }
 
+// ==========================================
+// 3. اسپلش اسکرین
+// ==========================================
 @Composable
-fun SplashScreenUI(onFinish: () -> Unit) {
+fun SplashScreen(onDone: () -> Unit) {
     LaunchedEffect(Unit) {
         delay(2000)
-        onFinish()
+        onDone()
     }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MidnightNavy),
+            .background(Brush.verticalGradient(listOf(PrimaryDark, Color(0xFF1E1B4B)))),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Surface(
                 modifier = Modifier.size(90.dp),
-                shape = CircleShape,
-                color = AccentTeal
+                shape = RoundedCornerShape(22.dp),
+                color = BrandIndigo,
+                shadowElevation = 10.dp
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Default.School, 
-                        contentDescription = null, 
-                        tint = Color.White, 
-                        modifier = Modifier.size(48.dp)
-                    )
+                    Icon(Icons.Default.School, contentDescription = null, tint = Color.White, modifier = Modifier.size(50.dp))
                 }
             }
+            Spacer(modifier = Modifier.height(18.dp))
+            Text("EDUCATE PRO", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp)
+            Text("Next-Gen Digital Learning Ecosystem", color = NeonEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(30.dp))
+            CircularProgressIndicator(color = NeonEmerald, modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
             Spacer(modifier = Modifier.height(20.dp))
-            Text(
-                text = "EDUCATE",
-                color = Color.White,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 4.sp
-            )
-            Text(
-                text = "Digital Education Ecosystem",
-                color = Color.White.copy(alpha = 0.8f),
-                fontSize = 14.sp
-            )
-            Spacer(modifier = Modifier.height(40.dp))
-            EducateAttributionWatermark()
+            Text("Architect: Muhammad Umair Sattar", color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp)
         }
     }
 }
 
+// ==========================================
+// 4. لاگ ان / زبان اور کلاس منتخب کرنے کا صفحہ
+// ==========================================
 @Composable
-fun LoginScreenUI(onLogin: (String) -> Unit, onAbout: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BackgroundIce)
-            .padding(24.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Icon(Icons.Default.School, contentDescription = null, tint = RoyalBlue, modifier = Modifier.size(60.dp))
-            Spacer(modifier = Modifier.height(12.dp))
-            Text("Welcome to EDUCATE", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MidnightNavy)
-            Text("Select your portal to test instantly", color = TextMuted, fontSize = 13.sp)
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(2.dp)
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text("Select Portal Role:", fontWeight = FontWeight.Bold, color = MidnightNavy)
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Button(
-                        onClick = { onLogin("STUDENT") },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = RoyalBlue)
-                    ) {
-                        Text("Student Dashboard (طالب علم پورٹل)")
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { onLogin("TEACHER") },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
-                    ) {
-                        Text("Teacher Dashboard (اساتذہ پورٹل)")
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { onLogin("ADMIN") },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MidnightNavy)
-                    ) {
-                        Text("School Admin (اسکول ایڈمن)")
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-            TextButton(onClick = onAbout) {
-                Text("About Developer & App Info", color = RoyalBlue, fontWeight = FontWeight.Bold)
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-            EducateAttributionWatermark()
-        }
-    }
-}
-
-@Composable
-fun UnifiedDashboardUI(role: String, onLogout: () -> Unit, onAbout: () -> Unit) {
-    val presentCount by remember { mutableIntStateOf(24) }
+fun OnboardingLoginScreen(
+    selectedLang: AppLanguage,
+    selectedGrade: StudentGrade,
+    onLangChanged: (AppLanguage) -> Unit,
+    onGradeChanged: (StudentGrade) -> Unit,
+    onEnter: () -> Unit
+) {
+    val isUrdu = selectedLang == AppLanguage.URDU
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundIce)
+            .background(SoftIce)
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        item {
+            Spacer(modifier = Modifier.height(20.dp))
+            Surface(modifier = Modifier.size(70.dp), shape = CircleShape, color = BrandIndigo) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.School, contentDescription = null, tint = Color.White, modifier = Modifier.size(38.dp))
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(if (isUrdu) "ایجوکیٹ پورٹل میں خوش آمدید" else "Welcome to EDUCATE Portal", fontSize = 22.sp, fontWeight = FontWeight.Black, color = PrimaryDark)
+            Text(if (isUrdu) "اپنی زبان اور کلاس منتخب کریں" else "Select your language & target class", fontSize = 13.sp, color = TextMuted)
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // 1. زبان کا انتخاب
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        if (isUrdu) "1. زبان کا انتخاب کریں (Select Language)" else "1. Choose Language (زبان کا انتخاب)",
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryDark,
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        LanguageOptionCard(
+                            title = "🇵🇰 اردو (Urdu)",
+                            isSelected = selectedLang == AppLanguage.URDU,
+                            modifier = Modifier.weight(1f)
+                        ) { onLangChanged(AppLanguage.URDU) }
+
+                        LanguageOptionCard(
+                            title = "🇬🇧 English",
+                            isSelected = selectedLang == AppLanguage.ENGLISH,
+                            modifier = Modifier.weight(1f)
+                        ) { onLangChanged(AppLanguage.ENGLISH) }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // 2. کلاس کا انتخاب
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        if (isUrdu) "2. اپنی موجودہ کلاس منتخب کریں:" else "2. Select Your Enrolled Class:",
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryDark,
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    StudentGrade.values().forEach { grade ->
+                        val isSelected = grade == selectedGrade
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .clickable { onGradeChanged(grade) },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) BrandIndigo else SoftIce
+                        ) {
+                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    if (isUrdu) grade.urLabel else grade.enLabel,
+                                    color = if (isSelected) Color.White else PrimaryDark,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.weight(1f),
+                                    fontSize = 14.sp
+                                )
+                                Text(
+                                    if (isUrdu) grade.levelUr else grade.levelEn,
+                                    color = if (isSelected) Color.White.copy(alpha = 0.8f) else TextMuted,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // 3. داخلہ بٹن
+        item {
+            Button(
+                onClick = onEnter,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BrandIndigo)
+            ) {
+                Text(
+                    if (isUrdu) "پورٹل میں داخل ہوں ➔" else "Enter Smart Campus ➔",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+            Text("Architected by Muhammad Umair Sattar © 2026", fontSize = 11.sp, color = TextMuted)
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+    }
+}
+
+// ==========================================
+// 5. مرکزی ڈیش بورڈ (مضامین اور کارکردگی)
+// ==========================================
+@Composable
+fun DashboardView(grade: StudentGrade, lang: AppLanguage, onToggleLang: () -> Unit, onLogout: () -> Unit) {
+    val isUrdu = lang == AppLanguage.URDU
+
+    val subjects = remember(grade) {
+        when (grade) {
+            StudentGrade.GRADE_1 -> listOf(
+                SubjectItem("Basic Mathematics", "بنیادی ریاضی و گنتی", 8, 0.85f),
+                SubjectItem("English Phonics & Rhymes", "انگریزی حروف اور نظمیں", 10, 0.70f),
+                SubjectItem("Urdu Qaida", "اردو قاعدہ و الفاظ", 6, 0.90f)
+            )
+            StudentGrade.GRADE_5 -> listOf(
+                SubjectItem("General Science", "جنرل سائنس اور تجربات", 12, 0.65f),
+                SubjectItem("Mathematics & Fractions", "ریاضی، کسر اور جیومیٹری", 14, 0.55f),
+                SubjectItem("Urdu Literature", "اردو ادب و قواعد", 10, 0.80f)
+            )
+            StudentGrade.GRADE_8 -> listOf(
+                SubjectItem("General Science & Chemistry", "سائنس اور کیمیاوی عوامل", 16, 0.50f),
+                SubjectItem("Algebra & Geometry", "الجبرہ اور اقلیدس", 18, 0.75f),
+                SubjectItem("Computer Studies", "کمپیوٹر اور کوڈنگ کی بنیاد", 12, 0.85f)
+            )
+            StudentGrade.GRADE_10 -> listOf(
+                SubjectItem("Physics: Mechanics & Waves", "طبیعیات: میکانیات اور لہریں", 22, 0.82f),
+                SubjectItem("Chemistry: Organic Compounds", "کیمسٹری: نامیاتی مرکبات", 20, 0.68f),
+                SubjectItem("Biology: Genetics & DNA", "حیاتیات: جینیات اور خلیات", 18, 0.74f),
+                SubjectItem("Mathematics: Advanced Calculus", "اعلیٰ ریاضی اور فارمولے", 24, 0.60f)
+            )
+            StudentGrade.GRADE_12 -> listOf(
+                SubjectItem("Physics: Quantum & Modern", "جدید طبیعیات اور ایٹمی ماڈل", 26, 0.72f),
+                SubjectItem("Higher Mathematics & Vectors", "ویکٹرز اور انٹیگریشن", 28, 0.64f),
+                SubjectItem("Computer Architecture & OOP", "او او پی اور الگورتھمز", 22, 0.88f)
+            )
+        }
+    }
+
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
         item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MidnightNavy)
+                    .background(Brush.verticalGradient(listOf(PrimaryDark, SurfaceDark)))
                     .padding(20.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(text = "$role PORTAL", color = AccentTeal, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "Hello, Muhammad Umair", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "Active Academic Session 2026", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
-                    }
-                    Row {
-                        IconButton(onClick = onAbout) {
-                            Icon(Icons.Default.Info, contentDescription = "Info", tint = Color.White)
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(if (isUrdu) "خوش آمدید،" else "Welcome Back,", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                            Text("Muhammad Umair", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black)
                         }
-                        IconButton(onClick = onLogout) {
-                            Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout", tint = Color.White)
+                        Row {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = BrandIndigo,
+                                modifier = Modifier.clickable { onToggleLang() }
+                            ) {
+                                Text(
+                                    if (isUrdu) "🇬🇧 English" else "🇵🇰 اردو",
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            IconButton(onClick = onLogout) {
+                                Icon(Icons.Default.ExitToApp, contentDescription = null, tint = Color.White)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.08f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(if (isUrdu) "فعال کلاس" else "ACTIVE ENROLLMENT", color = AmberGold, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                                Text(if (isUrdu) grade.urLabel else grade.enLabel, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                Text(if (isUrdu) grade.levelUr else grade.levelEn, color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
+                            }
+                            Surface(shape = CircleShape, color = NeonEmerald.copy(alpha = 0.2f)) {
+                                Text("GPA 3.96", color = NeonEmerald, modifier = Modifier.padding(8.dp), fontWeight = FontWeight.Black, fontSize = 12.sp)
+                            }
                         }
                     }
                 }
@@ -233,139 +412,34 @@ fun UnifiedDashboardUI(role: String, onLogout: () -> Unit, onAbout: () -> Unit) 
                     .padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text("Attendance", fontSize = 11.sp, color = TextMuted)
-                        Text("$presentCount / 25 Days", fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-                Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text("GPA / Grade", fontSize = 11.sp, color = TextMuted)
-                        Text("3.94 (A+)", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = AccentTeal)
-                    }
-                }
-                Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text("Fee Status", fontSize = 11.sp, color = TextMuted)
-                        Text("Clear", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = RoyalBlue)
-                    }
-                }
+                MetricCard(if (isUrdu) "حاضری" else "Attendance", "96%", NeonEmerald, Modifier.weight(1f))
+                MetricCard(if (isUrdu) "اسٹریک" else "Streak", "19 Days", AmberGold, Modifier.weight(1f))
+                MetricCard(if (isUrdu) "پوزیشن" else "Rank", "#02", BrandIndigo, Modifier.weight(1f))
             }
         }
 
         item {
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                Text("Registered Courses & Modules", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MidnightNavy)
-                Spacer(modifier = Modifier.height(8.dp))
-
-                val courses = listOf(
-                    "CS101: Advanced Algorithmic Thinking",
-                    "BIO201: Molecular Genetics & CRISPR",
-                    "PHY301: Modern Quantum Mechanics"
-                )
-
-                courses.forEach { course ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.MenuBook, contentDescription = null, tint = RoyalBlue)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(course, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(30.dp))
-            EducateAttributionWatermark()
-        }
-    }
-}
-
-@Composable
-fun AboutScreenUI(onBack: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BackgroundIce)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MidnightNavy)
-                .padding(16.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
-                }
-                Text("About EDUCATE", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Surface(modifier = Modifier.size(70.dp), shape = CircleShape, color = RoyalBlue) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.School, contentDescription = null, tint = Color.White, modifier = Modifier.size(38.dp))
-                }
-            }
-            Spacer(modifier = Modifier.height(14.dp))
-            Text("EDUCATE ECOSYSTEM", fontSize = 22.sp, fontWeight = FontWeight.Black, color = MidnightNavy)
-            Text("Version 1.0.0 (Native Android Production)", fontSize = 12.sp, color = TextMuted)
-
-            Spacer(modifier = Modifier.height(24.dp))
-
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(14.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2))
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text("Official Developer Credit", fontWeight = FontWeight.Bold, color = RoyalBlue)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Developed & Designed by Muhammad Umair Sattar", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text("Copyright © 2026 Muhammad Umair Sattar. All Rights Reserved.", color = TextMuted, fontSize = 12.sp)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        "An enterprise all-in-one educational ecosystem combining LMS, school administration, dynamic dashboards, and academic analytics.",
-                        fontSize = 13.sp,
-                        color = Color.DarkGray
-                    )
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(shape = CircleShape, color = LiveRed) { Box(modifier = Modifier.size(10.dp)) }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(if (isUrdu) "🔴 لائیو کلاس جاری ہے" else "🔴 LIVE CLASS IN SESSION", color = LiveRed, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text(if (isUrdu) "بورڈ امتحان کی مکمل تیاری • پروفیسر منیر" else "Exam Preparation • Prof. Munir", fontSize = 11.sp, color = Color.DarkGray)
+                    }
                 }
             }
-
-            Spacer(modifier = Modifier.weight(1f))
-            EducateAttributionWatermark()
         }
-    }
-}
 
-@Composable
-fun EducateAttributionWatermark() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("EDUCATE", fontWeight = FontWeight.Bold, color = RoyalBlue, letterSpacing = 2.sp, fontSize = 12.sp)
-        Text("Developed & Designed by Muhammad Umair Sattar", fontSize = 11.sp, color = TextMuted)
-        Text("Copyright © 2026 Muhammad Umair Sattar. All Rights Reserved.", fontSize = 9.sp, color = Color.Gray)
-    }
-}
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+   
